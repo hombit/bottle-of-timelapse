@@ -42,16 +42,37 @@ base = '''
 
 
 start = '''
-	<form action="/timelapse/" method="post">
-		<input value="Start" type="submit" /><br /><br />
+	<br />
+	<form action="/" method="post">
+		<input name="action" value="Start" type="submit" /><br /><br />
 			<input name="interval" type="number" /> &mdash; interval<br /><br />
 			<input name="frames" type="number" /> &mdash; number of frames<br /><br />
 	</form>
 '''
+
 stop = '''
+	<br />
 	<form action="/" method="post">
-		<input value="Stop" type="submit" /><br />
+		<input name="action" value="Stop" type="submit" /><br />
 	</form>
+
+	<br /><div id="lastphoto"></div>
+
+	<script>
+		var last = ""
+		setInterval( function(){
+			var r = new XMLHttpRequest();
+			r.open( "GET", "/lastphoto/?last="+last, false );
+			r.send( null );
+			if ( r.status == 200 ){
+				if ( ! /^$/.test(r.responseText) ){
+					last = r.responseText;
+					// document.write("<br /><img src='/Photos/"+last+".jpg' />");
+					document.getElementById("lastphoto").innerHTML = "<br /><img src='/Photos/" + last + ".jpg' /><br />" + document.getElementById("lastphoto").innerHTML;
+				}
+			}
+		}, 250);
+	</script>
 '''
 
 
@@ -65,18 +86,24 @@ def find_process():
 
 @get('/')
 def index_get():
-	timelapse = '<br /><a href="timelapse/">Timelapse</a>'
 	if find_process():
-		return base.format( body = stop + timelapse ) 
+		return base.format( body = stop ) 
 	else:
-		return base.format( body = start + timelapse )
+		return base.format( body = start )
 
 
 @post('/')
 def index_post():
-	p = find_process()
-	if p:
-		kill(p.pid, SIGKILL)	
+	action = request.forms.get('action')
+	if action == 'Stop':
+		p = find_process()
+		if p:
+			kill(p.pid, SIGKILL)	
+	if action == 'Start':
+		interval = request.forms.get('interval') or 4
+		frames = request.forms.get('frames') or 0
+		Popen( ['gphoto2', '--set-config', '/main/capturesettings/imagequality=4', '--capture-image-and-download', '--filename', '{}/%Y%m%d%H%M%S.%C'.format(photo_dir), '-I{}'.format(interval), '-F{}'.format(frames) ] )
+
 	return ( index_get() )
 
 
@@ -94,29 +121,6 @@ def lastphoto_get():
 			else:
 				break
 	return ('')
-
-
-@get('/timelapse/')
-def timelapse_get():
-	return base.format( body = stop + '''
-		<br /><div id="lastphoto"></div>
-
-		<script>
-			var last = ""
-			setInterval( function(){
-				var r = new XMLHttpRequest();
-				r.open( "GET", "/lastphoto/?last="+last, false );
-				r.send( null );
-				if ( r.status == 200 ){
-					if ( ! /^$/.test(r.responseText) ){
-						last = r.responseText;
-					//	document.write("<br /><img src='/Photos/"+last+".jpg' />");
-						document.getElementById("lastphoto").innerHTML = "<br /><img src='/Photos/" + last + ".jpg' /><br />" + document.getElementById("lastphoto").innerHTML;
-					}
-				}
-			}, 250);
-		</script>
-	''')
 
 
 @post('/timelapse/')
